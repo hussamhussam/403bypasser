@@ -180,13 +180,13 @@ class Query():
                 file.write(line + "\n")
                 
     def buildrequest(self,url,headers={},body="",method="GET",ctype=""):
-        if method == "GET" and method != "GUFF":
+        if method == "GET" or method == "GUFF":
             req = requests.Request(method=method, url=url, headers=headers)
         else:
             req = requests.Request(method=method, url=url, data={}, headers=headers)
         prep = req.prepare()
         prep.url = url
-        if method == "GET" and method != "GUFF":
+       if method != "GET" and method != "GUFF":
             prep.body = body
             prep.headers['Content-Length'] = str(len(body))
             if ctype != "":
