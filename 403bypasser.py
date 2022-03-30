@@ -1,4 +1,3 @@
-
 import requests, sys, argparse, validators, os, tldextract
 from colorama import init, Fore, Style
 from pyfiglet import Figlet
@@ -186,14 +185,14 @@ class Query():
             req = requests.Request(method=method, url=url, data={}, headers=headers)
         prep = req.prepare()
         prep.url = url
-       if method != "GET" and method != "GUFF":
+        if method != "GET" and method != "GUFF":
             prep.body = body
             prep.headers['Content-Length'] = str(len(body))
             if ctype != "":
                 prep.headers['Content-Type'] = ctype
         r = None
         with requests.Session() as s1:
-            r = s1.send(prep, verify=False,allow_redirects=False,proxies={"http":"127.0.0.1:8080","https":"127.0.0.1:8080"})
+            r = s1.send(prep, verify=False,allow_redirects=False)
             if r.status_code == 200:
                 print(url+" : "+method+" : "+ctype)
                 print(headers)
