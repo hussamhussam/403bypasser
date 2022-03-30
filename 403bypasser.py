@@ -62,7 +62,7 @@ class Arguments():
                 sys.exit()
             
             with open(self.urllist, 'r') as file:
-                temp = file.readlines()
+                temp = file.read().splitlines()
             
             for x in temp:
                 self.urls.append(x.strip())
@@ -84,7 +84,7 @@ class Arguments():
                 sys.exit()
             
             with open(self.dirlist, 'r') as file:
-                temp = file.readlines()
+                temp = file.read().splitlines()
             
             for x in temp:
                 self.dirs.append(x.strip())
@@ -107,7 +107,7 @@ class PathRepository():
         
         pairs = [["/", "//"], ["/.", "/./"]]
         
-        leadings = ["/%2e"]
+        leadings = ["/%2e","/.","/%2f"]
         
         trailings = ["/", "..;/", "/..;/", "%20", "%09", "%00", 
                     ".json", ".css", ".html", "?", "??", "???", 
