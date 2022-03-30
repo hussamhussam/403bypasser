@@ -196,6 +196,10 @@ class Query():
             r = s1.send(prep, verify=False,allow_redirects=False,proxies={"http":"127.0.0.1:8080","https":"127.0.0.1:8080"})
             if r.status_code == 200:
                 print(url+" : "+method+" : "+ctype)
+                print(headers)
+                print("------------------------------------------------------------")
+                print(r.text)
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         return r
         
     def manipulateRequest(self,method,ctype=""):
