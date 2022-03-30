@@ -134,7 +134,7 @@ class PathRepository():
         
         headers = ["X-Custom-IP-Authorization", "X-Forwarded-For", 
                 "X-Forward-For", "X-Remote-IP", "X-Originating-IP", 
-                "X-Remote-Addr", "X-Client-IP", "X-Real-IP"]
+                "X-Remote-Addr", "X-Client-IP", "X-Real-IP","Referer","Origin"]
         
         values = ["localhost", "localhost:80", "localhost:443", 
                 "127.0.0.1", "127.0.0.1:80", "127.0.0.1:443", 
@@ -149,13 +149,38 @@ class PathRepository():
         for element in headers_overwrite:
             self.rewriteHeaders.append({element : self.path})
 
-
+def buildrequest(url,headers={},body="",method="GET",ctype="",words=0):
+    if method == "GET" or method == "GUFF":
+        req = requests.Request(method=method, url=url, headers=headers)
+    else:
+        req = requests.Request(method=method, url=url, data={}, headers=headers)
+    prep = req.prepare()
+    prep.url = url
+    if method != "GET" and method != "GUFF":
+        prep.body = body
+        prep.headers['Content-Length'] = str(len(body))
+        if ctype != "":
+            prep.headers['Content-Type'] = ctype
+    r = None
+    with requests.Session() as s1:
+        r = s1.send(prep, verify=False,allow_redirects=False)
+        if len(r.text.split()) != words and words != 0:
+            with open('rawresponses.txt','a') as write:
+                write.write("Status Code: "+str(r.status_code)+'\n')
+                write.write(url+" : "+method+" : "+ctype+"\n")
+                write.write('\n'.join(headers)+"\n")
+                write.write("------------------------------------------------------------"+"\n")
+                write.write(r.text+"\n")
+                write.write(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"+"\n")
+    return r
+    
 class Query():
-    def __init__(self, url, dir, dirObject):
+    def __init__(self, url, dir, dirObject,words):
         self.url = url
         self.dir = dir          # call pathrepo by this
         self.dirObject = dirObject
         self.domain = tldextract.extract(self.url).domain
+        self.words = words
     
     
     
@@ -177,35 +202,12 @@ class Query():
         with open(self.domain + ".txt", "a") as file:
             for line in array:
                 file.write(line + "\n")
-                
-    def buildrequest(self,url,headers={},body="",method="GET",ctype=""):
-        if method == "GET" or method == "GUFF":
-            req = requests.Request(method=method, url=url, headers=headers)
-        else:
-            req = requests.Request(method=method, url=url, data={}, headers=headers)
-        prep = req.prepare()
-        prep.url = url
-        if method != "GET" and method != "GUFF":
-            prep.body = body
-            prep.headers['Content-Length'] = str(len(body))
-            if ctype != "":
-                prep.headers['Content-Type'] = ctype
-        r = None
-        with requests.Session() as s1:
-            r = s1.send(prep, verify=False,allow_redirects=False)
-            if r.status_code == 200:
-                print(url+" : "+method+" : "+ctype)
-                print(headers)
-                print("------------------------------------------------------------")
-                print(r.text)
-                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        return r
         
     def manipulateRequest(self,method,ctype=""):
         print(("Target URL: " + self.url + "          "+"Target Path: " + self.dir + " ").center(50, "="))
         print("=======================================================================")
         results = []
-        p = self.buildrequest(url=self.url + self.dir,method=method,ctype=ctype)
+        p = buildrequest(url=self.url + self.dir,method=method,ctype=ctype)
         
         colour = self.checkStatusCode(p.status_code)
         reset = Style.RESET_ALL
@@ -226,7 +228,7 @@ class Query():
         reset = Style.RESET_ALL
         
         for path in self.dirObject.newPaths:
-            r = self.buildrequest(url=self.url + path,method=method,ctype=ctype)
+            r = buildrequest(url=self.url + path,method=method,ctype=ctype)
             
             colour = self.checkStatusCode(r.status_code)
             
@@ -244,9 +246,9 @@ class Query():
     
     def manipulateHeaders(self,method,ctype=""):
         results = []
-        
+        self.dirObject.newHeaders.append({"Referer":self.url})
         for header in self.dirObject.newHeaders:
-            r = self.buildrequest(url=self.url + self.dir,method=method,headers=header,ctype=ctype)
+            r = buildrequest(url=self.url + self.dir,method=method,headers=header,ctype=ctype)
             
             colour = self.checkStatusCode(r.status_code)
             reset = Style.RESET_ALL
@@ -265,7 +267,7 @@ class Query():
         
         results_2 = []
         for header in self.dirObject.rewriteHeaders:
-            r = self.buildrequest(url=self.url, headers=header,method=method,ctype=ctype)
+            r = buildrequest(url=self.url, headers=header,method=method,ctype=ctype)
             
             colour = self.checkStatusCode(r.status_code)
             reset = Style.RESET_ALL
@@ -288,9 +290,14 @@ class Program():
     def __init__(self, urllist, dirlist):
         self.urllist = urllist
         self.dirlist = dirlist
-    
+    def heuristic(self,url):
+        r = buildrequest(url=url,method="GET")
+        size = len(r.text.split())
+        return size
+            
     def initialise(self):
         for u in self.urllist:
+            words = self.heuristic(u)
             for d in self.dirlist:
                 for method in methods:
                     for ctype in ctypes:
@@ -300,7 +307,7 @@ class Program():
                             dir_objname = "_rootPath"
                         locals()[dir_objname] = PathRepository(d)
                         domain_name = tldextract.extract(u).domain
-                        locals()[domain_name] = Query(u, d, locals()[dir_objname])
+                        locals()[domain_name] = Query(u, d, locals()[dir_objname],words)
                         locals()[domain_name].manipulateRequest(method=method,ctype=ctype)
                         locals()[domain_name].manipulatePath(method=method,ctype=ctype)
                         locals()[domain_name].manipulateHeaders(method=method,ctype=ctype)
