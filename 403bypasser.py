@@ -1,7 +1,11 @@
+
 import requests, sys, argparse, validators, os, tldextract
 from colorama import init, Fore, Style
 from pyfiglet import Figlet
 
+requests.packages.urllib3.disable_warnings()
+methods = ["GET","POST","PUT","TRACE","GUFF"]
+ctypes = ["","application/x-www-form-urlencoded","application/json"]
 # INITIALISE COLORAMA
 init()
 
@@ -61,8 +65,8 @@ class Arguments():
                 print("The specified path to URL list does not exist! Exitting...\n")
                 sys.exit()
             
-            with open(self.urllist, 'r') as file:
-                temp = file.read().splitlines()
+            with open(self.urllist, 'r') as read:
+                temp = read.read().splitlines()
             
             for x in temp:
                 self.urls.append(x.strip())
@@ -83,13 +87,14 @@ class Arguments():
                 print("The specified path to directory list does not exist! Exitting...\n")
                 sys.exit()
             
-            with open(self.dirlist, 'r') as file:
-                temp = file.read().splitlines()
+            with open(self.dirlist, 'r') as read:
+                temp = read.read().splitlines()
             
             for x in temp:
                 self.dirs.append(x.strip())
         else:
             self.dir = "/"
+            self.dirs.append(self.dir)
 
 
 class PathRepository():
@@ -109,11 +114,12 @@ class PathRepository():
         
         leadings = ["/%2e","/.","/%2f","/%252e"]
         
-        trailings = ["/", ";","..;/", "../", "\\","\\.","\\..\\.\\",".././","..\\","..%ff/",
+        trailings = ["/", ";","..;/", "../", "\\","\.","\\..\\.\\",".././","..\\","..%ff/",
                      "%2e%2e%2f",".%2e/","..%00/", "..%0d/","..%5c","..%2f","/..;/", 
                      "%20", "%09", "%00", ".json", ".css", ".html", "?", "??", "???", "%3f",
-                    "?testparam", "#", "#test", "/.","/*","/*/","/./.","/./","/nonexisting/..",
-                     "/nonexisting/%252e%252e",'"',"'","';",'";','");',"');",'"]',')]}','&',"%26",'%',"%23","%25"]
+                    "?testparam", "#", "#test", "/.","/*","/*/","/./.","/./","/nonexisting/..","nonexisting/..",
+                     "/nonexisting/%252e%252e","nonexisting/%252e%252e",
+                     '"',"'","';",'";','");',"');",'"]',')]}','&',"%26",'%',"%23","%25"]
         
         for pair in pairs:
             self.newPaths.append(pair[0] + self.path + pair[1])
@@ -172,88 +178,105 @@ class Query():
         with open(self.domain + ".txt", "a") as file:
             for line in array:
                 file.write(line + "\n")
-    
-    def manipulateRequest(self):
-        print((" Target URL: " + self.url + "\tTarget Path: " + self.dir + " ").center(121, "="))
+                
+    def buildrequest(self,url,headers={},body="",method="GET",ctype=""):
+        if method == "GET" and method != "GUFF":
+            req = requests.Request(method=method, url=url, headers=headers)
+        else:
+            req = requests.Request(method=method, url=url, data={}, headers=headers)
+        prep = req.prepare()
+        prep.url = url
+        if method == "GET" and method != "GUFF":
+            prep.body = body
+            prep.headers['Content-Length'] = str(len(body))
+            if ctype != "":
+                prep.headers['Content-Type'] = ctype
+        r = None
+        with requests.Session() as s1:
+            r = s1.send(prep, verify=False,allow_redirects=False,proxies={"http":"127.0.0.1:8080","https":"127.0.0.1:8080"})
+            if r.status_code == 200:
+                print(url+" : "+method+" : "+ctype)
+        return r
+        
+    def manipulateRequest(self,method,ctype=""):
+        print(("Target URL: " + self.url + "          "+"Target Path: " + self.dir + " ").center(50, "="))
+        print("=======================================================================")
         results = []
-        p = requests.post(self.url + self.dir)
+        p = self.buildrequest(url=self.url + self.dir,method=method,ctype=ctype)
         
         colour = self.checkStatusCode(p.status_code)
         reset = Style.RESET_ALL
-        
-        line_width = 100
-        target_address = "POST --> " + self.url + self.dir
+        target_address = method+" --> " + self.url + self.dir
         info = f"STATUS: {colour}{p.status_code}{reset}\tSIZE: {len(p.content)}"
         info_pure = f"STATUS: {p.status_code}\tSIZE: {len(p.content)}"
-        remaining = line_width - len(target_address)
         
-        print("\n" + target_address + " " * remaining + info)
+        print( target_address + "          " + info)
+        if ctype != "":
+            print("Content-Type: "+ctype)
         
-        results.append(target_address + " " * remaining + info_pure)
+        results.append(target_address + "          " + info_pure)
         
         self.writeToFile(results)
-        
-        self.manipulatePath()
     
-    def manipulatePath(self):
+    def manipulatePath(self,method,ctype=""):
         results = []
         reset = Style.RESET_ALL
-        line_width = 100
         
         for path in self.dirObject.newPaths:
-            r = requests.get(self.url + path)
+            r = self.buildrequest(url=self.url + path,method=method,ctype=ctype)
             
             colour = self.checkStatusCode(r.status_code)
             
-            target_address = "GET --> " + self.url + path
+            target_address = method+" --> " + self.url + path
             info = f"STATUS: {colour}{r.status_code}{reset}\tSIZE: {len(r.content)}"
             info_pure = f"STATUS: {r.status_code}\tSIZE: {len(r.content)}"
-            remaining = line_width - len(target_address)
             
-            print(target_address + " " * remaining + info)
+            print(target_address + " " * 10 + info)
+            if ctype != "":
+                print("Content-Type: "+ctype)
             
-            results.append(target_address + " " * remaining + info_pure)
+            results.append(target_address + " " * 10 + info_pure)
         
         self.writeToFile(results)
-        self.manipulateHeaders()
     
-    def manipulateHeaders(self):
+    def manipulateHeaders(self,method,ctype=""):
         results = []
-        line_width = 100
         
         for header in self.dirObject.newHeaders:
-            r = requests.get(self.url + self.dir, headers=header)
+            r = self.buildrequest(url=self.url + self.dir,method=method,headers=header,ctype=ctype)
             
             colour = self.checkStatusCode(r.status_code)
             reset = Style.RESET_ALL
             
-            target_address = "GET --> " + self.url + self.dir
+            target_address = method+" --> " + self.url + self.dir
             info = f"STATUS: {colour}{r.status_code}{reset}\tSIZE: {len(r.content)}"
             info_pure = f"STATUS: {r.status_code}\tSIZE: {len(r.content)}"
-            remaining = line_width - len(target_address)
+            if ctype != "":
+                print("Content-Type: "+ctype)
             
-            print("\n" + target_address + " " * remaining + info)
+            print("\n" + target_address + " " * 10 + info)
             print(f"Header= {header}")
             
-            results.append("\n" + target_address + " " * remaining + info_pure + f"\nHeader= {header}")
+            results.append("\n" + target_address + " " * 10 + info_pure + f"\nHeader= {header}")
         self.writeToFile(results)
         
         results_2 = []
         for header in self.dirObject.rewriteHeaders:
-            r = requests.get(self.url, headers=header)
+            r = self.buildrequest(url=self.url, headers=header,method=method,ctype=ctype)
             
             colour = self.checkStatusCode(r.status_code)
             reset = Style.RESET_ALL
             
-            target_address = "GET --> " + self.url
+            target_address = method+" --> " + self.url
             info = f"STATUS: {colour}{r.status_code}{reset}\tSIZE: {len(r.content)}"
             info_pure = f"STATUS: {r.status_code}\tSIZE: {len(r.content)}"
-            remaining = line_width - len(target_address)
+            if ctype != "":
+                print("Content-Type: "+ctype)
             
-            print("\n" + target_address + " " * remaining + info)
+            print("\n" + target_address + " " * 10 + info)
             print(f"Header= {header}")
             
-            results_2.append("\n" + target_address + " " * remaining + info_pure + f"\nHeader= {header}")
+            results_2.append("\n" + target_address + " " * 10 + info_pure + f"\nHeader= {header}")
         
         self.writeToFile(results_2)
 
@@ -266,14 +289,18 @@ class Program():
     def initialise(self):
         for u in self.urllist:
             for d in self.dirlist:
-                if d != "/":
-                    dir_objname = d.lstrip("/")
-                else:
-                    dir_objname = "_rootPath"
-                locals()[dir_objname] = PathRepository(d)
-                domain_name = tldextract.extract(u).domain
-                locals()[domain_name] = Query(u, d, locals()[dir_objname])
-                locals()[domain_name].manipulateRequest()
+                for method in methods:
+                    for ctype in ctypes:
+                        if d != "/":
+                            dir_objname = d.lstrip("/")
+                        else:
+                            dir_objname = "_rootPath"
+                        locals()[dir_objname] = PathRepository(d)
+                        domain_name = tldextract.extract(u).domain
+                        locals()[domain_name] = Query(u, d, locals()[dir_objname])
+                        locals()[domain_name].manipulateRequest(method=method,ctype=ctype)
+                        locals()[domain_name].manipulatePath(method=method,ctype=ctype)
+                        locals()[domain_name].manipulateHeaders(method=method,ctype=ctype)
 
 argument = Arguments(args.url, args.urllist, args.dir, args.dirlist)
 program = Program(argument.return_urls(), argument.return_dirs())
