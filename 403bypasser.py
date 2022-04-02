@@ -3,7 +3,8 @@ from colorama import init, Fore, Style
 from pyfiglet import Figlet
 
 requests.packages.urllib3.disable_warnings()
-methods = ["GET","POST","PUT","TRACE","GUFF"]
+#methods = ["GET","POST","PUT","TRACE","SEARCH","PATCH","PROPFIND","VERSION-CONTROL","MKCOL","LOCK","REPORT","UNLOCK","MOVE","LABEL","COPY","CHECKIN"]
+methods = ["ACL","ARBITRARY","BASELINE-CONTROL","CHECKIN","CHECKOUT","CONNECT","COPY","GET","HEAD","LABEL","LOCK","MERGE","MKACTIVITY","MKCOL","MKWORKSPACE","MOVE","OPTIONS","ORDERPATCH","PATCH","POST","PROPFIND","PROPPATCH","PUT","REPORT","SEARCH","TRACE","UNCHECKOUT","UNLOCK","UPDATE","VERSION-CONTROL"]
 ctypes = ["","application/x-www-form-urlencoded","application/json"]
 # INITIALISE COLORAMA
 init()
@@ -25,12 +26,14 @@ parser.add_argument("-u", "--url", type=str, help="single URL to scan, ex: http:
 parser.add_argument("-U", "--urllist", type=str, help="path to list of URLs, ex: urllist.txt")
 parser.add_argument("-d", "--dir", type=str, help="Single directory to scan, ex: /admin", nargs="?", const="/")
 parser.add_argument("-D", "--dirlist", type=str, help="path to list of directories, ex: dirlist.txt")
+parser.add_argument("-o", "--output", type=str, help="file to save the output")
 
 args = parser.parse_args()
 # HANDLE ARGUMENTS -- END
 
-
-
+if not args.output:
+    print("please provide a destination file")
+    sys.exit()
 class Arguments():
     def __init__(self, url, urllist, dir, dirlist):
         self.url = url
@@ -134,7 +137,7 @@ class PathRepository():
         
         headers = ["X-Custom-IP-Authorization", "X-Forwarded-For", 
                 "X-Forward-For", "X-Remote-IP", "X-Originating-IP", 
-                "X-Remote-Addr", "X-Client-IP", "X-Real-IP","Referer","Origin"]
+                "X-Remote-Addr", "X-Client-IP", "X-Real-IP","Referer","Origin","Host","X-Host","X-Forwarded-Host"]
         
         values = ["localhost", "localhost:80", "localhost:443", 
                 "127.0.0.1", "127.0.0.1:80", "127.0.0.1:443", 
@@ -153,9 +156,12 @@ def buildrequest(url,headers={},body="",method="GET",ctype="",words=0):
     if method == "GET" or method == "GUFF":
         req = requests.Request(method=method, url=url, headers=headers)
     else:
+        body = "HelloServer"
         req = requests.Request(method=method, url=url, data={}, headers=headers)
     prep = req.prepare()
     prep.url = url
+    if 'Host' in headers:
+        prep.headers['Host'] = headers['Host']
     if method != "GET" and method != "GUFF":
         prep.body = body
         prep.headers['Content-Length'] = str(len(body))
@@ -164,8 +170,9 @@ def buildrequest(url,headers={},body="",method="GET",ctype="",words=0):
     r = None
     with requests.Session() as s1:
         r = s1.send(prep, verify=False,allow_redirects=False)
-        if len(r.text.split()) != words and words != 0:
-            with open('rawresponses.txt','a') as write:
+        if (len(r.text.split()) != words and words != 0) or r.status_code == 200:
+            with open(args.output,'a') as write:
+                write.write(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"+"\n")
                 write.write("Status Code: "+str(r.status_code)+'\n')
                 write.write(url+" : "+method+" : "+ctype+"\n")
                 write.write('\n'.join(headers)+"\n")
@@ -199,7 +206,7 @@ class Query():
         return colour
     
     def writeToFile(self, array):
-        with open(self.domain + ".txt", "a") as file:
+        with open(args.output, "a") as file:
             for line in array:
                 file.write(line + "\n")
         
@@ -247,6 +254,7 @@ class Query():
     def manipulateHeaders(self,method,ctype=""):
         results = []
         self.dirObject.newHeaders.append({"Referer":self.url})
+        ##check if Host: 127.0.0.1
         for header in self.dirObject.newHeaders:
             r = buildrequest(url=self.url + self.dir,method=method,headers=header,ctype=ctype)
             
@@ -309,8 +317,9 @@ class Program():
                         domain_name = tldextract.extract(u).domain
                         locals()[domain_name] = Query(u, d, locals()[dir_objname],words)
                         locals()[domain_name].manipulateRequest(method=method,ctype=ctype)
-                        locals()[domain_name].manipulatePath(method=method,ctype=ctype)
-                        locals()[domain_name].manipulateHeaders(method=method,ctype=ctype)
+                        if method == "GET" or method == "PUT" or method == "POST" or method == "PATCH":
+                            locals()[domain_name].manipulatePath(method=method,ctype=ctype)
+                            locals()[domain_name].manipulateHeaders(method=method,ctype=ctype)
 
 argument = Arguments(args.url, args.urllist, args.dir, args.dirlist)
 program = Program(argument.return_urls(), argument.return_dirs())
